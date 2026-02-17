@@ -12,6 +12,7 @@ export interface StreamOptions {
   args: string[];
   cwd?: string;
   env?: NodeJS.ProcessEnv;
+  input?: string;
   timeoutMs?: number;
   signal?: AbortSignal;
 }
@@ -23,7 +24,7 @@ export interface StreamOptions {
 export async function* streamCommand(
   options: StreamOptions,
 ): AsyncGenerator<RawStreamEvent> {
-  const { command, args, cwd, env, timeoutMs, signal } = options;
+  const { command, args, cwd, env, input, timeoutMs, signal } = options;
 
   const child = spawn(command, args, {
     stdio: ["pipe", "pipe", "pipe"],
@@ -31,8 +32,13 @@ export async function* streamCommand(
     env: env ?? process.env,
   });
 
-  // Close stdin immediately since we don't send input for streaming
-  child.stdin?.end();
+  // Write input to stdin if provided, then close
+  if (input !== undefined && child.stdin) {
+    child.stdin.write(input);
+    child.stdin.end();
+  } else {
+    child.stdin?.end();
+  }
 
   const emitter = new EventEmitter();
   let buffer = "";

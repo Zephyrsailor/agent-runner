@@ -90,7 +90,11 @@ export function parseStreamJsonLine(line: string): StreamEvent | null {
   }
 }
 
-/** Build common CLI args based on mode and options (shared by run and stream). */
+/**
+ * Build CLI args based on mode and options.
+ * The prompt is sent via stdin (not as a positional arg) to avoid
+ * issues with multi-value flags like --tools consuming subsequent args.
+ */
 function buildModeArgs(options: RunOptions, outputFormat: string): string[] {
   const mode = options.mode ?? "full-access";
   const args: string[] = ["-p", "--output-format", outputFormat];
@@ -103,8 +107,10 @@ function buildModeArgs(options: RunOptions, outputFormat: string): string[] {
       args.push("--permission-mode", "acceptEdits");
       break;
     case "print":
-      // Disable all tools for pure text output
-      args.push("--tools", "");
+      // In print mode, still skip permissions (non-interactive) but restrict tools
+      // Using --dangerously-skip-permissions avoids hangs on approval prompts
+      args.push("--dangerously-skip-permissions");
+      args.push("--allowedTools", "Read", "Glob", "Grep", "WebFetch", "WebSearch");
       break;
   }
 
@@ -117,7 +123,7 @@ function buildModeArgs(options: RunOptions, outputFormat: string): string[] {
   if (options.systemPrompt) {
     args.push("--append-system-prompt", options.systemPrompt);
   }
-  if (options.allowedTools && options.allowedTools.length > 0) {
+  if (options.allowedTools && options.allowedTools.length > 0 && mode !== "print") {
     args.push("--allowedTools", ...options.allowedTools);
   }
   if (options.maxBudgetUsd !== undefined) {
@@ -127,9 +133,7 @@ function buildModeArgs(options: RunOptions, outputFormat: string): string[] {
     args.push(...options.extraArgs);
   }
 
-  // Prompt goes last
-  args.push(options.prompt);
-
+  // Prompt is sent via stdin, not as positional arg
   return args;
 }
 
@@ -174,6 +178,7 @@ export class ClaudeCodeBackend implements Backend {
       args,
       cwd: options.cwd,
       env,
+      input: options.prompt,
       timeoutMs,
       signal: options.signal,
     });
@@ -209,6 +214,7 @@ export class ClaudeCodeBackend implements Backend {
       args,
       cwd: options.cwd,
       env,
+      input: options.prompt,
       timeoutMs: options.timeoutMs,
       signal: options.signal,
     });

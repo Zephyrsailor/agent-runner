@@ -16,11 +16,13 @@
     "dev": "tsc --watch",
     "test": "vitest run",
     "test:watch": "vitest",
-    "example": "tsx examples/basic.ts"
+    "example": "tsx examples/basic.ts",
+    "prepublishOnly": "npm run build && npm test"
   },
   "files": [
     "dist",
-    "README.md"
+    "README.md",
+    "LICENSE"
   ],
   "keywords": [
     "claude",

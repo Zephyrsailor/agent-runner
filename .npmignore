@@ -3,3 +3,4 @@ examples/
 *.test.ts
 tsconfig.json
 .gitignore
+.github/

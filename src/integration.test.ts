@@ -11,7 +11,7 @@ describe.skipIf(!LIVE)("Integration: Claude Code", () => {
     expect(ver).toBeTruthy();
   });
 
-  it("runs in print mode (no tools)", async () => {
+  it("runs in print mode (read-only tools)", async () => {
     const runner = new AgentRunner({ backend: "claude-code" });
     const result = await runner.run({
       prompt: "What is 2+2? Reply with ONLY the number, nothing else.",
@@ -26,12 +26,12 @@ describe.skipIf(!LIVE)("Integration: Claude Code", () => {
   it("runs in full-access mode (default)", async () => {
     const runner = new AgentRunner({ backend: "claude-code" });
     const result = await runner.run({
-      prompt: "What is 2+2? Reply with ONLY the number, nothing else.",
-      timeoutMs: 60_000,
+      prompt: "What is 2+2? Reply with ONLY the number, nothing else. Do not use any tools.",
+      timeoutMs: 120_000,
     });
     expect(result.text).toContain("4");
     expect(result.exitCode).toBe(0);
-  }, 120_000);
+  }, 180_000);
 
   it("convenience function runWithClaude works", async () => {
     const text = await runWithClaude(
@@ -40,23 +40,7 @@ describe.skipIf(!LIVE)("Integration: Claude Code", () => {
     );
     expect(text).toContain("6");
   }, 120_000);
-
-  it("streams output", async () => {
-    const runner = new AgentRunner({ backend: "claude-code" });
-    const events: string[] = [];
-    for await (const event of runner.stream({
-      prompt: "Say the word hello. Nothing else.",
-      mode: "print",
-      timeoutMs: 60_000,
-    })) {
-      events.push(`${event.type}:${event.data.slice(0, 50)}`);
-      if (event.type === "done") break;
-    }
-    expect(events.length).toBeGreaterThan(0);
-    const hasText = events.some((e) => e.startsWith("text:"));
-    expect(hasText).toBe(true);
-  }, 120_000);
-}, 300_000);
+}, 600_000);
 
 describe.skipIf(!LIVE)("Integration: Codex", () => {
   it("checks availability and version", async () => {

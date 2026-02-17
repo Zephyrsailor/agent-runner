@@ -14,12 +14,19 @@ export function parseCodexJsonl(raw: string): { text: string; sessionId?: string
     try {
       const obj = JSON.parse(line);
 
-      // Extract session/thread ID
-      if (obj.thread_id && !sessionId) {
+      // Extract session/thread ID from thread.started event
+      if (obj.type === "thread.started" && obj.thread_id) {
         sessionId = obj.thread_id;
       }
 
-      // Extract message content
+      // Extract text from item.completed events (agent_message)
+      if (obj.type === "item.completed" && obj.item) {
+        if (obj.item.type === "agent_message" && typeof obj.item.text === "string") {
+          textParts.push(obj.item.text);
+        }
+      }
+
+      // Legacy format: message with role=assistant
       if (obj.type === "message" && obj.role === "assistant") {
         if (typeof obj.content === "string") {
           textParts.push(obj.content);
