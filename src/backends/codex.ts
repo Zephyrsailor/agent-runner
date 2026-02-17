@@ -5,7 +5,7 @@ import { spawnCommand } from "../spawn.js";
  * Parse Codex JSONL output to extract text and session ID.
  * Codex outputs newline-delimited JSON objects.
  */
-function parseCodexJsonl(raw: string): { text: string; sessionId?: string } {
+export function parseCodexJsonl(raw: string): { text: string; sessionId?: string } {
   const lines = raw.trim().split("\n").filter(Boolean);
   const textParts: string[] = [];
   let sessionId: string | undefined;

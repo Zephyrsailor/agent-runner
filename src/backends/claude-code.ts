@@ -5,7 +5,7 @@ import { spawnCommand } from "../spawn.js";
  * Parse Claude Code JSON output to extract the assistant text and session ID.
  * Claude --output-format json returns { result, session_id, ... }.
  */
-function parseClaudeJson(raw: string): { text: string; sessionId?: string } {
+export function parseClaudeJson(raw: string): { text: string; sessionId?: string } {
   try {
     const parsed = JSON.parse(raw);
 

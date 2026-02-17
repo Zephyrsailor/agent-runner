@@ -1,39 +1,7 @@
 import { describe, it, expect } from "vitest";
+import { parseCodexJsonl } from "./codex.js";
 
-describe("Codex JSONL parsing", () => {
-  function parseCodexJsonl(raw: string): { text: string; sessionId?: string } {
-    const lines = raw.trim().split("\n").filter(Boolean);
-    const textParts: string[] = [];
-    let sessionId: string | undefined;
-
-    for (const line of lines) {
-      try {
-        const obj = JSON.parse(line);
-        if (obj.thread_id && !sessionId) {
-          sessionId = obj.thread_id;
-        }
-        if (obj.type === "message" && obj.role === "assistant") {
-          if (typeof obj.content === "string") {
-            textParts.push(obj.content);
-          } else if (Array.isArray(obj.content)) {
-            for (const part of obj.content) {
-              if (part.type === "output_text" && typeof part.text === "string") {
-                textParts.push(part.text);
-              }
-            }
-          }
-        }
-      } catch {
-        // skip
-      }
-    }
-
-    if (textParts.length > 0) {
-      return { text: textParts.join("\n"), sessionId };
-    }
-    return { text: lines[lines.length - 1] ?? raw.trim(), sessionId };
-  }
-
+describe("parseCodexJsonl", () => {
   it("parses assistant message with string content", () => {
     const jsonl = [
       JSON.stringify({ thread_id: "t-1" }),
@@ -74,5 +42,19 @@ describe("Codex JSONL parsing", () => {
     ].join("\n");
     const parsed = parseCodexJsonl(jsonl);
     expect(parsed.text).toBe("response");
+  });
+
+  it("handles multiple assistant messages", () => {
+    const jsonl = [
+      JSON.stringify({ type: "message", role: "assistant", content: "first" }),
+      JSON.stringify({ type: "message", role: "assistant", content: "second" }),
+    ].join("\n");
+    const parsed = parseCodexJsonl(jsonl);
+    expect(parsed.text).toBe("first\nsecond");
+  });
+
+  it("handles empty input", () => {
+    const parsed = parseCodexJsonl("");
+    expect(parsed.text).toBe("");
   });
 });

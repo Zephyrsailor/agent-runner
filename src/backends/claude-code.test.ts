@@ -1,39 +1,7 @@
-import { describe, it, expect, vi } from "vitest";
+import { describe, it, expect } from "vitest";
+import { parseClaudeJson } from "./claude-code.js";
 
-// Test the parseClaudeJson function by extracting it
-// Since it's private, we test through the backend's run method indirectly,
-// or we can test the parsing logic inline.
-
-describe("Claude JSON parsing", () => {
-  function parseClaudeJson(raw: string): { text: string; sessionId?: string } {
-    try {
-      const parsed = JSON.parse(raw);
-      if (typeof parsed.result === "string") {
-        return {
-          text: parsed.result,
-          sessionId: parsed.session_id ?? parsed.sessionId,
-        };
-      }
-      if (Array.isArray(parsed.result)) {
-        const textParts: string[] = [];
-        for (const block of parsed.result) {
-          if (block.type === "text" && typeof block.text === "string") {
-            textParts.push(block.text);
-          }
-        }
-        if (textParts.length > 0) {
-          return {
-            text: textParts.join("\n"),
-            sessionId: parsed.session_id ?? parsed.sessionId,
-          };
-        }
-      }
-      return { text: raw.trim() };
-    } catch {
-      return { text: raw.trim() };
-    }
-  }
-
+describe("parseClaudeJson", () => {
   it("parses simple result string", () => {
     const json = JSON.stringify({ result: "Hello world", session_id: "abc-123" });
     const parsed = parseClaudeJson(json);
@@ -70,6 +38,13 @@ describe("Claude JSON parsing", () => {
   it("falls back to raw on unexpected shape", () => {
     const json = JSON.stringify({ foo: "bar" });
     const parsed = parseClaudeJson(json);
+    expect(parsed.text).toBe(json);
+  });
+
+  it("handles empty result array", () => {
+    const json = JSON.stringify({ result: [], session_id: "s1" });
+    const parsed = parseClaudeJson(json);
+    // Falls back to raw since no text blocks found
     expect(parsed.text).toBe(json);
   });
 });
