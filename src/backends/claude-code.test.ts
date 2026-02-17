@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { parseClaudeJson, parseStreamJsonLine } from "./claude-code.js";
+import { parseClaudeJson, parseStreamJsonLine, parseVerboseStreamJson } from "./claude-code.js";
 
 describe("parseClaudeJson", () => {
   it("parses simple result string", () => {
@@ -157,5 +157,111 @@ describe("parseStreamJsonLine", () => {
   it("treats non-JSON as text", () => {
     const event = parseStreamJsonLine("some raw text");
     expect(event).toEqual({ type: "text", data: "some raw text" });
+  });
+});
+
+describe("parseVerboseStreamJson", () => {
+  it("extracts tool_use from assistant messages and result from final line", () => {
+    const lines = [
+      JSON.stringify({ type: "system", subtype: "init", tools: ["Bash", "Read"] }),
+      JSON.stringify({
+        type: "assistant",
+        message: {
+          content: [
+            { type: "tool_use", name: "Bash", input: { command: "printf 'hello' > /tmp/test.txt" } },
+          ],
+        },
+      }),
+      JSON.stringify({
+        type: "user",
+        message: { content: [{ tool_use_id: "toolu_123", type: "tool_result", content: "" }] },
+      }),
+      JSON.stringify({
+        type: "assistant",
+        message: { content: [{ type: "text", text: "Done." }] },
+      }),
+      JSON.stringify({
+        type: "result",
+        result: "Done.",
+        session_id: "s1",
+        num_turns: 2,
+        total_cost_usd: 0.058,
+      }),
+    ].join("\n");
+
+    const parsed = parseVerboseStreamJson(lines);
+    expect(parsed.text).toBe("Done.");
+    expect(parsed.sessionId).toBe("s1");
+    expect(parsed.numTurns).toBe(2);
+    expect(parsed.costUsd).toBe(0.058);
+    expect(parsed.toolUses).toHaveLength(1);
+    expect(parsed.toolUses![0].name).toBe("Bash");
+    expect(parsed.toolUses![0].input).toEqual({ command: "printf 'hello' > /tmp/test.txt" });
+  });
+
+  it("extracts multiple tool calls across turns", () => {
+    const lines = [
+      JSON.stringify({
+        type: "assistant",
+        message: {
+          content: [
+            { type: "tool_use", name: "Read", input: { file_path: "/tmp/a.txt" } },
+          ],
+        },
+      }),
+      JSON.stringify({
+        type: "assistant",
+        message: {
+          content: [
+            { type: "tool_use", name: "Edit", input: { file_path: "/tmp/a.txt", old_string: "x", new_string: "y" } },
+          ],
+        },
+      }),
+      JSON.stringify({
+        type: "assistant",
+        message: { content: [{ type: "text", text: "Updated." }] },
+      }),
+      JSON.stringify({
+        type: "result",
+        result: "Updated.",
+        num_turns: 3,
+        total_cost_usd: 0.12,
+        session_id: "s2",
+      }),
+    ].join("\n");
+
+    const parsed = parseVerboseStreamJson(lines);
+    expect(parsed.toolUses).toHaveLength(2);
+    expect(parsed.toolUses![0].name).toBe("Read");
+    expect(parsed.toolUses![1].name).toBe("Edit");
+    expect(parsed.numTurns).toBe(3);
+  });
+
+  it("returns no toolUses when no tool calls occurred", () => {
+    const lines = [
+      JSON.stringify({
+        type: "assistant",
+        message: { content: [{ type: "text", text: "4" }] },
+      }),
+      JSON.stringify({
+        type: "result",
+        result: "4",
+        num_turns: 1,
+        total_cost_usd: 0.02,
+        session_id: "s3",
+      }),
+    ].join("\n");
+
+    const parsed = parseVerboseStreamJson(lines);
+    expect(parsed.text).toBe("4");
+    expect(parsed.toolUses).toBeUndefined();
+    expect(parsed.numTurns).toBe(1);
+  });
+
+  it("falls back to parseClaudeJson for non-stream content", () => {
+    const json = JSON.stringify({ result: "hello", session_id: "s4", num_turns: 1, total_cost_usd: 0.01 });
+    const parsed = parseVerboseStreamJson(json);
+    expect(parsed.text).toBe("hello");
+    expect(parsed.sessionId).toBe("s4");
   });
 });

@@ -44,6 +44,23 @@ describe.skipIf(!LIVE)("Integration: Claude Code", () => {
     expect(result.costUsd).toBeGreaterThan(0);
   }, 120_000);
 
+  it("verbose mode captures tool calls in full-access", async () => {
+    const runner = new AgentRunner({ backend: "claude-code" });
+    const result = await runner.run({
+      prompt: "Read the file /etc/hostname or run 'echo test'. Reply with what you got.",
+      mode: "full-access",
+      verbose: true,
+      timeoutMs: 120_000,
+    });
+    expect(result.exitCode).toBe(0);
+    expect(result.numTurns).toBeGreaterThanOrEqual(2);
+    expect(result.toolUses).toBeDefined();
+    expect(result.toolUses!.length).toBeGreaterThanOrEqual(1);
+    // Should have used Bash or Read
+    const toolNames = result.toolUses!.map((t) => t.name);
+    expect(toolNames.some((n) => ["Bash", "Read"].includes(n))).toBe(true);
+  }, 180_000);
+
   it("convenience function runWithClaude works", async () => {
     const text = await runWithClaude(
       "What is 3+3? Reply with ONLY the number.",

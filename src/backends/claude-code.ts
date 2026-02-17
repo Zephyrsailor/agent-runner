@@ -114,6 +114,67 @@ export function parseStreamJsonLine(line: string): StreamEvent | null {
 }
 
 /**
+ * Parse verbose stream-json output (multiple JSONL lines) to extract
+ * text, session ID, metadata, and full tool call details.
+ *
+ * Verbose stream-json events include:
+ * - { type: "assistant", message: { content: [{ type: "tool_use", name, input }] } }
+ * - { type: "result", result: "...", num_turns, total_cost_usd, session_id }
+ */
+export function parseVerboseStreamJson(raw: string): ParsedClaudeResult {
+  const lines = raw.trim().split("\n").filter(Boolean);
+  const toolUses: ToolUseEntry[] = [];
+  let resultLine: ParsedClaudeResult | undefined;
+
+  for (const line of lines) {
+    try {
+      const obj = JSON.parse(line);
+
+      // Extract tool_use from assistant messages
+      if (obj.type === "assistant" && obj.message?.content) {
+        const content = Array.isArray(obj.message.content) ? obj.message.content : [];
+        for (const block of content) {
+          if (block.type === "tool_use" && typeof block.name === "string") {
+            toolUses.push({ name: block.name, input: block.input });
+          }
+        }
+      }
+
+      // Parse the final result line for text/sessionId/numTurns/costUsd
+      if (obj.type === "result") {
+        const text = typeof obj.result === "string"
+          ? obj.result
+          : Array.isArray(obj.result)
+            ? obj.result
+                .filter((b: { type: string }) => b.type === "text")
+                .map((b: { text: string }) => b.text)
+                .join("\n")
+            : JSON.stringify(obj.result);
+
+        resultLine = {
+          text,
+          sessionId: obj.session_id ?? obj.sessionId,
+          numTurns: typeof obj.num_turns === "number" ? obj.num_turns : undefined,
+          costUsd: typeof obj.total_cost_usd === "number" ? obj.total_cost_usd : undefined,
+        };
+      }
+    } catch {
+      // Skip unparseable lines
+    }
+  }
+
+  if (resultLine) {
+    return {
+      ...resultLine,
+      toolUses: toolUses.length > 0 ? toolUses : undefined,
+    };
+  }
+
+  // Fallback: try parsing as plain JSON (in case --verbose wasn't honored)
+  return parseClaudeJson(raw);
+}
+
+/**
  * Build CLI args based on mode and options.
  * The prompt is sent via stdin (not as a positional arg) to avoid
  * issues with multi-value flags like --tools consuming subsequent args.
@@ -191,7 +252,14 @@ export class ClaudeCodeBackend implements Backend {
   async run(options: RunOptions): Promise<RunResult> {
     const start = Date.now();
     const timeoutMs = options.timeoutMs ?? 300_000;
-    const args = buildModeArgs(options, "json");
+    const verbose = options.verbose ?? false;
+
+    // Verbose mode: use stream-json + --verbose to capture full tool call details
+    const outputFormat = verbose ? "stream-json" : "json";
+    const args = buildModeArgs(options, outputFormat);
+    if (verbose) {
+      args.push("--verbose");
+    }
 
     const env = options.env
       ? { ...process.env, ...options.env }
@@ -215,7 +283,9 @@ export class ClaudeCodeBackend implements Backend {
       );
     }
 
-    const parsed = parseClaudeJson(result.stdout);
+    const parsed = verbose
+      ? parseVerboseStreamJson(result.stdout)
+      : parseClaudeJson(result.stdout);
 
     return {
       text: parsed.text,

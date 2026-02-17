@@ -39,6 +39,16 @@ export interface RunOptions {
    * Maximum dollar amount to spend on API calls (Claude Code only).
    */
   maxBudgetUsd?: number;
+  /**
+   * Enable verbose mode to capture full tool call details (Claude Code only).
+   *
+   * When true, uses `--output-format stream-json --verbose` internally and
+   * parses every tool_use event, populating `RunResult.toolUses` with the
+   * complete list of tools the agent invoked (name + input).
+   *
+   * Defaults to false.
+   */
+  verbose?: boolean;
 }
 
 /** A record of a single tool invocation during the run. */

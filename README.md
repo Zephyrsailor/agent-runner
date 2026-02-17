@@ -33,11 +33,12 @@ Real integration test output (Claude Code v2.1.45, Codex CLI v0.63.0):
  ✓ Claude Code: print mode           7.5s
  ✓ Claude Code: full-access mode    66.3s  (agent used Bash + file tools)
  ✓ Claude Code: metadata             7.4s
+ ✓ Claude Code: verbose tool capture 13.8s (captured Bash/Read tool calls)
  ✓ Claude Code: runWithClaude        8.1s
  ✓ Codex: print mode                 5.4s
  ✓ Codex: runWithCodex               3.3s
  ✓ Auto: detect + run                7.6s
-   48/48 tests passed
+   53/53 tests passed (43 unit + 10 integration)
 ```
 
 ### Print mode (text-only response)
@@ -93,6 +94,26 @@ const result = await agent.run({
 console.log(result.text);      // "hello"  ← actual file content, not a guess
 console.log(result.numTurns);  // 2        ← Read tool was invoked
 ```
+
+### Verbose mode: see exactly what tools were called
+
+Add `verbose: true` to get the full list of tool invocations in `toolUses`:
+
+```typescript
+const result = await agent.run({
+  prompt: "Create /tmp/hello.txt with 'hello'. Reply done.",
+  mode: "full-access",
+  verbose: true,
+});
+
+console.log(result.toolUses);
+// [{ name: "Bash", input: { command: "printf 'hello' > /tmp/hello.txt" } }]
+
+console.log(result.numTurns);  // 2
+console.log(result.costUsd);   // 0.058
+```
+
+Without `verbose`, you still get `numTurns` and `costUsd` (always available), but `toolUses` will only be populated if the result format includes tool blocks. With `verbose: true`, tool calls are always captured.
 
 ## Execution Modes
 
@@ -239,6 +260,7 @@ const agent = new AgentRunner({ backend: myBackend });
 | `extraArgs` | `string[]` | | Additional CLI flags |
 | `allowedTools` | `string[]` | | Tool allowlist (Claude only) |
 | `maxBudgetUsd` | `number` | | Budget cap (Claude only) |
+| `verbose` | `boolean` | `false` | Capture full tool call details (Claude only) |
 
 ### `RunResult`
 
@@ -250,7 +272,7 @@ const agent = new AgentRunner({ backend: myBackend });
 | `exitCode` | `number?` | Process exit code |
 | `numTurns` | `number?` | Conversation turns (1 = no tools, 2+ = tool calls occurred) |
 | `costUsd` | `number?` | Total API cost in USD (Claude Code only) |
-| `toolUses` | `ToolUseEntry[]?` | Tools the agent invoked (Claude Code with array result) |
+| `toolUses` | `ToolUseEntry[]?` | Tools the agent invoked (use `verbose: true` for full capture) |
 
 ### `StreamEvent`
 
@@ -262,8 +284,8 @@ const agent = new AgentRunner({ backend: myBackend });
 ## Testing
 
 ```bash
-npm test                              # Unit tests (39 tests)
-AGENT_RUNNER_LIVE_TEST=1 npm test     # + integration tests (9 more, requires CLI tools)
+npm test                              # Unit tests (43 tests)
+AGENT_RUNNER_LIVE_TEST=1 npm test     # + integration tests (10 more, requires CLI tools)
 ```
 
 ## License
