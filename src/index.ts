@@ -3,7 +3,7 @@ export { AgentRunner } from "./runner.js";
 export type { AgentRunnerConfig, BackendId } from "./runner.js";
 
 // Types
-export type { Backend, RunOptions, RunResult, StreamEvent } from "./types.js";
+export type { Backend, RunOptions, RunResult, StreamEvent, ToolUseEntry } from "./types.js";
 
 // Backends (for direct use or extending)
 export { AutoBackend } from "./backends/auto.js";

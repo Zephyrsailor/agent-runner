@@ -33,6 +33,17 @@ describe.skipIf(!LIVE)("Integration: Claude Code", () => {
     expect(result.exitCode).toBe(0);
   }, 180_000);
 
+  it("returns numTurns and costUsd metadata", async () => {
+    const runner = new AgentRunner({ backend: "claude-code" });
+    const result = await runner.run({
+      prompt: "What is 1+1? Reply with ONLY the number.",
+      mode: "print",
+      timeoutMs: 60_000,
+    });
+    expect(result.numTurns).toBeGreaterThanOrEqual(1);
+    expect(result.costUsd).toBeGreaterThan(0);
+  }, 120_000);
+
   it("convenience function runWithClaude works", async () => {
     const text = await runWithClaude(
       "What is 3+3? Reply with ONLY the number.",

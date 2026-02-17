@@ -25,12 +25,18 @@
     "LICENSE"
   ],
   "keywords": [
-    "claude",
+    "claude-code",
     "codex",
+    "ai-agent",
     "agent",
     "cli",
     "ai",
-    "llm"
+    "llm",
+    "automation",
+    "anthropic",
+    "openai",
+    "tool-use",
+    "subprocess"
   ],
   "license": "MIT",
   "devDependencies": {

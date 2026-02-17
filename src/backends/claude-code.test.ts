@@ -23,6 +23,45 @@ describe("parseClaudeJson", () => {
     expect(parsed.sessionId).toBe("sess-456");
   });
 
+  it("extracts tool_use entries from array result", () => {
+    const json = JSON.stringify({
+      result: [
+        { type: "text", text: "Done" },
+        { type: "tool_use", name: "Bash", input: { command: "ls" } },
+        { type: "tool_use", name: "Edit", input: { file: "a.ts" } },
+      ],
+      session_id: "s1",
+    });
+    const parsed = parseClaudeJson(json);
+    expect(parsed.toolUses).toHaveLength(2);
+    expect(parsed.toolUses![0]).toEqual({ name: "Bash", input: { command: "ls" } });
+    expect(parsed.toolUses![1]).toEqual({ name: "Edit", input: { file: "a.ts" } });
+  });
+
+  it("extracts numTurns and costUsd from top-level JSON", () => {
+    const json = JSON.stringify({
+      result: "4",
+      session_id: "s1",
+      num_turns: 1,
+      total_cost_usd: 0.021,
+    });
+    const parsed = parseClaudeJson(json);
+    expect(parsed.numTurns).toBe(1);
+    expect(parsed.costUsd).toBe(0.021);
+  });
+
+  it("extracts numTurns > 1 indicating tool use occurred", () => {
+    const json = JSON.stringify({
+      result: "done.",
+      session_id: "s2",
+      num_turns: 3,
+      total_cost_usd: 0.108,
+    });
+    const parsed = parseClaudeJson(json);
+    expect(parsed.numTurns).toBe(3);
+    expect(parsed.costUsd).toBe(0.108);
+  });
+
   it("handles sessionId field name variant", () => {
     const json = JSON.stringify({ result: "ok", sessionId: "id-789" });
     const parsed = parseClaudeJson(json);
@@ -33,6 +72,8 @@ describe("parseClaudeJson", () => {
     const parsed = parseClaudeJson("just plain text");
     expect(parsed.text).toBe("just plain text");
     expect(parsed.sessionId).toBeUndefined();
+    expect(parsed.numTurns).toBeUndefined();
+    expect(parsed.costUsd).toBeUndefined();
   });
 
   it("falls back to raw on unexpected shape", () => {
@@ -45,6 +86,15 @@ describe("parseClaudeJson", () => {
     const json = JSON.stringify({ result: [], session_id: "s1" });
     const parsed = parseClaudeJson(json);
     expect(parsed.text).toBe(json);
+  });
+
+  it("returns no toolUses when result has only text blocks", () => {
+    const json = JSON.stringify({
+      result: [{ type: "text", text: "just text" }],
+      session_id: "s3",
+    });
+    const parsed = parseClaudeJson(json);
+    expect(parsed.toolUses).toBeUndefined();
   });
 });
 

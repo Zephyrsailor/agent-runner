@@ -25,6 +25,39 @@ const answer = await runWithClaude("Fix the bug in src/app.ts", {
 });
 ```
 
+## Real Output
+
+```typescript
+const agent = new AgentRunner({ backend: "claude-code" });
+const result = await agent.run({
+  prompt: "What is 2+2? Reply with just the number.",
+  mode: "print",
+});
+
+console.log(result);
+// {
+//   text: "4",
+//   sessionId: "35109334-1e41-4ca3-a73f-10c849dea3f8",
+//   durationMs: 2426,
+//   exitCode: 0,
+//   numTurns: 1,
+//   costUsd: 0.02099
+// }
+```
+
+In full-access mode, the agent uses tools and `numTurns` reflects that:
+
+```typescript
+const result = await agent.run({
+  prompt: "Create /tmp/hello.txt with 'hello'. Reply done.",
+  mode: "full-access",
+  cwd: "/tmp",
+});
+
+console.log(result.numTurns); // 2 (turn 1: tool call, turn 2: response)
+console.log(result.costUsd);  // 0.058
+```
+
 ## Execution Modes
 
 The key differentiator: agent-runner gives you access to the **full capabilities** of Claude Code and Codex, not just text completion.
@@ -60,7 +93,7 @@ await agent.run({
 |------|------------|-------|
 | `full-access` (default) | `--dangerously-skip-permissions` | `--dangerously-bypass-approvals-and-sandbox` |
 | `workspace-write` | `--permission-mode acceptEdits` | `--sandbox workspace-write --full-auto` |
-| `print` | `--tools ""` | `--sandbox read-only` |
+| `print` | `--allowedTools Read,Glob,Grep,...` | `--sandbox read-only` |
 
 ## Streaming
 
@@ -179,6 +212,9 @@ const agent = new AgentRunner({ backend: myBackend });
 | `sessionId` | `string?` | Session ID for follow-ups |
 | `durationMs` | `number` | Wall-clock duration |
 | `exitCode` | `number?` | Process exit code |
+| `numTurns` | `number?` | Conversation turns (1 = no tools, 2+ = tool calls occurred) |
+| `costUsd` | `number?` | Total API cost in USD (Claude Code only) |
+| `toolUses` | `ToolUseEntry[]?` | Tools the agent invoked (Claude Code with array result) |
 
 ### `StreamEvent`
 
@@ -190,8 +226,8 @@ const agent = new AgentRunner({ backend: myBackend });
 ## Testing
 
 ```bash
-npm test                              # Unit tests (34 tests)
-AGENT_RUNNER_LIVE_TEST=1 npm test     # + integration tests (requires CLI tools)
+npm test                              # Unit tests (39 tests)
+AGENT_RUNNER_LIVE_TEST=1 npm test     # + integration tests (9 more, requires CLI tools)
 ```
 
 ## License
