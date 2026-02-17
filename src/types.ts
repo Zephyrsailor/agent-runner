@@ -8,24 +8,37 @@ export interface RunOptions {
   sessionId?: string;
   /** Model to use (e.g. "opus", "sonnet", "o4-mini"). */
   model?: string;
-  /** System prompt to prepend. */
+  /** System prompt to prepend/append. */
   systemPrompt?: string;
   /** Abort signal to cancel the run. */
   signal?: AbortSignal;
   /** Timeout in milliseconds. Defaults to 300_000 (5 min). */
   timeoutMs?: number;
   /**
-   * Whether to allow the agent to write files and execute commands.
-   * - "none": full access, no sandbox (Claude: --dangerously-skip-permissions, Codex: --sandbox off)
-   * - "read-only": agent can read but not modify (default for Codex)
-   * - "locked": no file system access (Codex only)
-   * Defaults to "none" (full access with skipped permissions).
+   * Execution mode controlling what the agent can do.
+   *
+   * - "print": text-only response, no tool use (Claude: --tools "", Codex: --sandbox read-only)
+   * - "full-access": agent can edit files, run bash, use all tools with no prompts
+   *   (Claude: --dangerously-skip-permissions, Codex: --dangerously-bypass-approvals-and-sandbox)
+   * - "workspace-write": agent can write within workspace only
+   *   (Claude: --permission-mode acceptEdits, Codex: --sandbox workspace-write)
+   *
+   * Defaults to "full-access".
    */
-  sandbox?: "none" | "read-only" | "locked";
+  mode?: "print" | "full-access" | "workspace-write";
   /** Additional CLI flags to pass to the backend command. */
   extraArgs?: string[];
   /** Environment variables to pass to the child process. Merged with process.env. */
   env?: Record<string, string>;
+  /**
+   * Restrict which tools are available (Claude Code only).
+   * E.g. ["Bash", "Read", "Edit"] or ["Bash(git:*)"]
+   */
+  allowedTools?: string[];
+  /**
+   * Maximum dollar amount to spend on API calls (Claude Code only).
+   */
+  maxBudgetUsd?: number;
 }
 
 /** Result from an agent run. */
@@ -40,6 +53,12 @@ export interface RunResult {
   exitCode: number | null;
 }
 
+/** Event emitted during streaming. */
+export interface StreamEvent {
+  type: "text" | "tool_use" | "tool_result" | "error" | "done";
+  data: string;
+}
+
 /** A backend that can execute agent runs via a CLI tool. */
 export interface Backend {
   /** Human-readable backend name. */
@@ -50,4 +69,6 @@ export interface Backend {
   version?(): Promise<string | null>;
   /** Execute a prompt and return the result. */
   run(options: RunOptions): Promise<RunResult>;
+  /** Execute a prompt and stream events. */
+  stream?(options: RunOptions): AsyncIterable<StreamEvent>;
 }

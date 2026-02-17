@@ -1,5 +1,6 @@
-import type { Backend, RunOptions, RunResult } from "../types.js";
+import type { Backend, RunOptions, RunResult, StreamEvent } from "../types.js";
 import { spawnCommand } from "../spawn.js";
+import { streamCommand } from "../streaming.js";
 
 /**
  * Parse Claude Code JSON output to extract the assistant text and session ID.
@@ -41,6 +42,97 @@ export function parseClaudeJson(raw: string): { text: string; sessionId?: string
   }
 }
 
+/**
+ * Parse a single line of Claude stream-json output into a StreamEvent.
+ */
+export function parseStreamJsonLine(line: string): StreamEvent | null {
+  try {
+    const obj = JSON.parse(line);
+
+    // Assistant text message
+    if (obj.type === "assistant" && typeof obj.message === "string") {
+      return { type: "text", data: obj.message };
+    }
+    // Content block with text
+    if (obj.type === "content_block_delta" || obj.type === "text") {
+      const text = obj.text ?? obj.delta?.text;
+      if (typeof text === "string") {
+        return { type: "text", data: text };
+      }
+    }
+    // Tool use events
+    if (obj.type === "tool_use") {
+      return { type: "tool_use", data: JSON.stringify({ name: obj.name, input: obj.input }) };
+    }
+    // Tool result events
+    if (obj.type === "tool_result") {
+      return { type: "tool_result", data: JSON.stringify({ output: obj.output ?? obj.content }) };
+    }
+    // Result message (final)
+    if (obj.type === "result") {
+      const text = typeof obj.result === "string"
+        ? obj.result
+        : Array.isArray(obj.result)
+          ? obj.result
+              .filter((b: { type: string }) => b.type === "text")
+              .map((b: { text: string }) => b.text)
+              .join("\n")
+          : JSON.stringify(obj.result);
+      return { type: "text", data: text };
+    }
+
+    return null;
+  } catch {
+    if (line.trim()) {
+      return { type: "text", data: line };
+    }
+    return null;
+  }
+}
+
+/** Build common CLI args based on mode and options (shared by run and stream). */
+function buildModeArgs(options: RunOptions, outputFormat: string): string[] {
+  const mode = options.mode ?? "full-access";
+  const args: string[] = ["-p", "--output-format", outputFormat];
+
+  switch (mode) {
+    case "full-access":
+      args.push("--dangerously-skip-permissions");
+      break;
+    case "workspace-write":
+      args.push("--permission-mode", "acceptEdits");
+      break;
+    case "print":
+      // Disable all tools for pure text output
+      args.push("--tools", "");
+      break;
+  }
+
+  if (options.model) {
+    args.push("--model", options.model);
+  }
+  if (options.sessionId) {
+    args.push("--session-id", options.sessionId);
+  }
+  if (options.systemPrompt) {
+    args.push("--append-system-prompt", options.systemPrompt);
+  }
+  if (options.allowedTools && options.allowedTools.length > 0) {
+    args.push("--allowedTools", ...options.allowedTools);
+  }
+  if (options.maxBudgetUsd !== undefined) {
+    args.push("--max-budget-usd", String(options.maxBudgetUsd));
+  }
+  if (options.extraArgs) {
+    args.push(...options.extraArgs);
+  }
+
+  // Prompt goes last
+  args.push(options.prompt);
+
+  return args;
+}
+
 export class ClaudeCodeBackend implements Backend {
   readonly name = "claude-code";
 
@@ -72,38 +164,7 @@ export class ClaudeCodeBackend implements Backend {
   async run(options: RunOptions): Promise<RunResult> {
     const start = Date.now();
     const timeoutMs = options.timeoutMs ?? 300_000;
-
-    const sandbox = options.sandbox ?? "none";
-    const args: string[] = [
-      "-p",
-      "--output-format",
-      "json",
-    ];
-
-    // In "none" sandbox mode, skip permission prompts for full tool access
-    if (sandbox === "none") {
-      args.push("--dangerously-skip-permissions");
-    }
-
-    if (options.model) {
-      args.push("--model", options.model);
-    }
-
-    if (options.sessionId) {
-      args.push("--session-id", options.sessionId);
-    }
-
-    if (options.systemPrompt) {
-      args.push("--append-system-prompt", options.systemPrompt);
-    }
-
-    // Extra args from caller
-    if (options.extraArgs) {
-      args.push(...options.extraArgs);
-    }
-
-    // Prompt goes as the last positional arg
-    args.push(options.prompt);
+    const args = buildModeArgs(options, "json");
 
     const env = options.env
       ? { ...process.env, ...options.env }
@@ -134,5 +195,37 @@ export class ClaudeCodeBackend implements Backend {
       durationMs,
       exitCode: result.code,
     };
+  }
+
+  async *stream(options: RunOptions): AsyncIterable<StreamEvent> {
+    const args = buildModeArgs(options, "stream-json");
+
+    const env = options.env
+      ? { ...process.env, ...options.env }
+      : undefined;
+
+    const rawStream = streamCommand({
+      command: this.command,
+      args,
+      cwd: options.cwd,
+      env,
+      timeoutMs: options.timeoutMs,
+      signal: options.signal,
+    });
+
+    for await (const rawEvent of rawStream) {
+      if (rawEvent.type === "done") {
+        yield { type: "done", data: rawEvent.data };
+        return;
+      }
+      if (rawEvent.type === "error") {
+        yield { type: "error", data: rawEvent.data };
+        return;
+      }
+      const parsed = parseStreamJsonLine(rawEvent.data);
+      if (parsed) {
+        yield parsed;
+      }
+    }
   }
 }

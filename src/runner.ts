@@ -1,4 +1,4 @@
-import type { Backend, RunOptions, RunResult } from "./types.js";
+import type { Backend, RunOptions, RunResult, StreamEvent } from "./types.js";
 import { AutoBackend } from "./backends/auto.js";
 import { ClaudeCodeBackend } from "./backends/claude-code.js";
 import { CodexBackend } from "./backends/codex.js";
@@ -44,6 +44,18 @@ export class AgentRunner {
   /** Run a prompt through the agent backend. */
   async run(options: RunOptions): Promise<RunResult> {
     return this.backend.run(options);
+  }
+
+  /**
+   * Stream events from the agent backend.
+   * Only supported by backends that implement stream() (e.g. ClaudeCodeBackend).
+   * Throws if the backend does not support streaming.
+   */
+  stream(options: RunOptions): AsyncIterable<StreamEvent> {
+    if (!this.backend.stream) {
+      throw new Error(`Backend "${this.backend.name}" does not support streaming`);
+    }
+    return this.backend.stream(options);
   }
 
   /** Return the CLI version string, or null if not available. */

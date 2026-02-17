@@ -44,6 +44,18 @@ export function parseCodexJsonl(raw: string): { text: string; sessionId?: string
   return { text: lines[lines.length - 1] ?? raw.trim(), sessionId };
 }
 
+/** Map our mode to codex sandbox flags. */
+function resolveCodexSandbox(mode: RunOptions["mode"]): string[] {
+  switch (mode ?? "full-access") {
+    case "full-access":
+      return ["--dangerously-bypass-approvals-and-sandbox"];
+    case "workspace-write":
+      return ["--sandbox", "workspace-write", "--full-auto"];
+    case "print":
+      return ["--sandbox", "read-only"];
+  }
+}
+
 export class CodexBackend implements Backend {
   readonly name = "codex";
 
@@ -75,30 +87,25 @@ export class CodexBackend implements Backend {
   async run(options: RunOptions): Promise<RunResult> {
     const start = Date.now();
     const timeoutMs = options.timeoutMs ?? 300_000;
-
-    const sandbox = options.sandbox ?? "read-only";
-    const codexSandbox = sandbox === "none" ? "off" : sandbox === "locked" ? "locked" : "read-only";
+    const sandboxArgs = resolveCodexSandbox(options.mode);
 
     const args: string[] = [
       "exec",
       "--json",
       "--color",
       "never",
-      "--sandbox",
-      codexSandbox,
+      ...sandboxArgs,
       "--skip-git-repo-check",
     ];
 
     if (options.model) {
       args.push("--model", options.model);
     }
-
-    // Extra args from caller
     if (options.extraArgs) {
       args.push(...options.extraArgs);
     }
 
-    // Prompt goes as the last positional arg
+    // Prompt goes last
     args.push(options.prompt);
 
     const env = options.env

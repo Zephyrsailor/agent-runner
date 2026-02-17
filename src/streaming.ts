@@ -1,7 +1,8 @@
 import { spawn } from "node:child_process";
 import { EventEmitter } from "node:events";
 
-export interface StreamEvent {
+/** Raw line-level event from the spawned process (internal use). */
+export interface RawStreamEvent {
   type: "text" | "error" | "done";
   data: string;
 }
@@ -21,7 +22,7 @@ export interface StreamOptions {
  */
 export async function* streamCommand(
   options: StreamOptions,
-): AsyncGenerator<StreamEvent> {
+): AsyncGenerator<RawStreamEvent> {
   const { command, args, cwd, env, timeoutMs, signal } = options;
 
   const child = spawn(command, args, {
@@ -62,7 +63,7 @@ export async function* streamCommand(
     buffer = lines.pop() ?? "";
     for (const line of lines) {
       if (line.trim()) {
-        emitter.emit("event", { type: "text", data: line } satisfies StreamEvent);
+        emitter.emit("event", { type: "text", data: line } satisfies RawStreamEvent);
       }
     }
   });
@@ -78,23 +79,23 @@ export async function* streamCommand(
       if (signal) signal.removeEventListener("abort", onAbort);
       // Flush remaining buffer
       if (buffer.trim()) {
-        emitter.emit("event", { type: "text", data: buffer.trim() } satisfies StreamEvent);
+        emitter.emit("event", { type: "text", data: buffer.trim() } satisfies RawStreamEvent);
       }
       resolve(code);
     });
     child.on("error", (err) => {
       done = true;
       if (timer) clearTimeout(timer);
-      emitter.emit("event", { type: "error", data: err.message } satisfies StreamEvent);
+      emitter.emit("event", { type: "error", data: err.message } satisfies RawStreamEvent);
       resolve(null);
     });
   });
 
   // Yield events as they come in
-  const queue: StreamEvent[] = [];
+  const queue: RawStreamEvent[] = [];
   let resolveWait: (() => void) | null = null;
 
-  emitter.on("event", (event: StreamEvent) => {
+  emitter.on("event", (event: RawStreamEvent) => {
     queue.push(event);
     if (resolveWait) {
       resolveWait();
