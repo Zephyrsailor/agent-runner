@@ -12,3 +12,7 @@ export { CodexBackend } from "./backends/codex.js";
 // Spawn utility
 export { spawnCommand } from "./spawn.js";
 export type { SpawnResult, SpawnOptions } from "./spawn.js";
+
+// Streaming
+export { streamCommand } from "./streaming.js";
+export type { StreamEvent, StreamOptions } from "./streaming.js";

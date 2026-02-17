@@ -69,18 +69,26 @@ export class CodexBackend implements Backend {
     const start = Date.now();
     const timeoutMs = options.timeoutMs ?? 300_000;
 
+    const sandbox = options.sandbox ?? "read-only";
+    const codexSandbox = sandbox === "none" ? "off" : sandbox === "locked" ? "locked" : "read-only";
+
     const args: string[] = [
       "exec",
       "--json",
       "--color",
       "never",
       "--sandbox",
-      "read-only",
+      codexSandbox,
       "--skip-git-repo-check",
     ];
 
     if (options.model) {
       args.push("--model", options.model);
+    }
+
+    // Extra args from caller
+    if (options.extraArgs) {
+      args.push(...options.extraArgs);
     }
 
     // Prompt goes as the last positional arg

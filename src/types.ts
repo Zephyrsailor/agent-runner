@@ -14,6 +14,16 @@ export interface RunOptions {
   signal?: AbortSignal;
   /** Timeout in milliseconds. Defaults to 300_000 (5 min). */
   timeoutMs?: number;
+  /**
+   * Whether to allow the agent to write files and execute commands.
+   * - "none": full access, no sandbox (Claude: --dangerously-skip-permissions, Codex: --sandbox off)
+   * - "read-only": agent can read but not modify (default for Codex)
+   * - "locked": no file system access (Codex only)
+   * Defaults to "none" (full access with skipped permissions).
+   */
+  sandbox?: "none" | "read-only" | "locked";
+  /** Additional CLI flags to pass to the backend command. */
+  extraArgs?: string[];
 }
 
 /** Result from an agent run. */

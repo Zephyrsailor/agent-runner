@@ -66,12 +66,17 @@ export class ClaudeCodeBackend implements Backend {
     const start = Date.now();
     const timeoutMs = options.timeoutMs ?? 300_000;
 
+    const sandbox = options.sandbox ?? "none";
     const args: string[] = [
       "-p",
       "--output-format",
       "json",
-      "--dangerously-skip-permissions",
     ];
+
+    // In "none" sandbox mode, skip permission prompts for full tool access
+    if (sandbox === "none") {
+      args.push("--dangerously-skip-permissions");
+    }
 
     if (options.model) {
       args.push("--model", options.model);
@@ -83,6 +88,11 @@ export class ClaudeCodeBackend implements Backend {
 
     if (options.systemPrompt) {
       args.push("--append-system-prompt", options.systemPrompt);
+    }
+
+    // Extra args from caller
+    if (options.extraArgs) {
+      args.push(...options.extraArgs);
     }
 
     // Prompt goes as the last positional arg
