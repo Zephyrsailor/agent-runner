@@ -46,6 +46,8 @@ export interface Backend {
   readonly name: string;
   /** Check if the CLI tool is installed and reachable. */
   available(): Promise<boolean>;
+  /** Return the CLI version string, or null if not available. */
+  version?(): Promise<string | null>;
   /** Execute a prompt and return the result. */
   run(options: RunOptions): Promise<RunResult>;
 }

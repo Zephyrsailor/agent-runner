@@ -46,6 +46,14 @@ export class AgentRunner {
     return this.backend.run(options);
   }
 
+  /** Return the CLI version string, or null if not available. */
+  async version(): Promise<string | null> {
+    if (this.backend.version) {
+      return this.backend.version();
+    }
+    return (await this.backend.available()) ? "unknown" : null;
+  }
+
   /** The name of the active backend. */
   get backendName(): string {
     return this.backend.name;

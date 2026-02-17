@@ -51,14 +51,21 @@ export class ClaudeCodeBackend implements Backend {
   }
 
   async available(): Promise<boolean> {
+    return (await this.version()) !== null;
+  }
+
+  async version(): Promise<string | null> {
     try {
       const result = await spawnCommand(this.command, {
         args: ["--version"],
         timeoutMs: 10_000,
       });
-      return result.code === 0 && result.stdout.trim().length > 0;
+      if (result.code === 0 && result.stdout.trim().length > 0) {
+        return result.stdout.trim();
+      }
+      return null;
     } catch {
-      return false;
+      return null;
     }
   }
 
