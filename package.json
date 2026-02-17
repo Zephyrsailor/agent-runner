@@ -39,6 +39,12 @@
     "subprocess"
   ],
   "license": "MIT",
+  "author": "Zephyrsailor",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/Zephyrsailor/agent-runner.git"
+  },
+  "homepage": "https://github.com/Zephyrsailor/agent-runner",
   "devDependencies": {
     "@types/node": "^25.2.3",
     "tsx": "^4.7.0",

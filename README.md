@@ -25,7 +25,22 @@ const answer = await runWithClaude("Fix the bug in src/app.ts", {
 });
 ```
 
-## Real Output
+## Verified Results
+
+Real integration test output (Claude Code v2.1.45, Codex CLI v0.63.0):
+
+```
+ ✓ Claude Code: print mode           7.5s
+ ✓ Claude Code: full-access mode    66.3s  (agent used Bash + file tools)
+ ✓ Claude Code: metadata             7.4s
+ ✓ Claude Code: runWithClaude        8.1s
+ ✓ Codex: print mode                 5.4s
+ ✓ Codex: runWithCodex               3.3s
+ ✓ Auto: detect + run                7.6s
+   48/48 tests passed
+```
+
+### Print mode (text-only response)
 
 ```typescript
 const agent = new AgentRunner({ backend: "claude-code" });
@@ -40,12 +55,14 @@ console.log(result);
 //   sessionId: "35109334-1e41-4ca3-a73f-10c849dea3f8",
 //   durationMs: 2426,
 //   exitCode: 0,
-//   numTurns: 1,
-//   costUsd: 0.02099
+//   numTurns: 1,      ← single turn, no tool calls
+//   costUsd: 0.021
 // }
 ```
 
-In full-access mode, the agent uses tools and `numTurns` reflects that:
+### Full-access mode (agent executes tools)
+
+This is the key differentiator. In full-access mode, Claude Code actually runs Bash commands, reads/writes files, and uses all available tools:
 
 ```typescript
 const result = await agent.run({
@@ -54,8 +71,27 @@ const result = await agent.run({
   cwd: "/tmp",
 });
 
-console.log(result.numTurns); // 2 (turn 1: tool call, turn 2: response)
-console.log(result.costUsd);  // 0.058
+console.log(result.text);      // "done."
+console.log(result.numTurns);  // 2  ← turn 1: Bash tool call, turn 2: text response
+console.log(result.costUsd);   // 0.058
+```
+
+What happened under the hood (visible via streaming):
+```
+[tool_use]  Bash: printf 'hello' > /tmp/hello.txt
+[result]    (exit 0)
+[text]      Done.
+```
+
+Another example -- reading a file and returning its content:
+```typescript
+const result = await agent.run({
+  prompt: "Read /tmp/hello.txt and tell me what it contains.",
+  mode: "full-access",
+});
+
+console.log(result.text);      // "hello"  ← actual file content, not a guess
+console.log(result.numTurns);  // 2        ← Read tool was invoked
 ```
 
 ## Execution Modes
