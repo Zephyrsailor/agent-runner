@@ -1,35 +1,58 @@
-import type { Backend, RunOptions, RunResult, StreamEvent } from "../types.js";
+import type { Backend, RunOptions, RunResult, StreamEvent, ToolUseEntry } from "../types.js";
 import { spawnCommand } from "../spawn.js";
 import { streamCommand } from "../streaming.js";
 
+export interface ParsedClaudeResult {
+  text: string;
+  sessionId?: string;
+  numTurns?: number;
+  costUsd?: number;
+  toolUses?: ToolUseEntry[];
+}
+
 /**
- * Parse Claude Code JSON output to extract the assistant text and session ID.
- * Claude --output-format json returns { result, session_id, ... }.
+ * Parse Claude Code JSON output to extract the assistant text, session ID,
+ * and metadata (turns, cost, tool usage).
+ *
+ * Claude --output-format json returns:
+ *   { result, session_id, num_turns, total_cost_usd, ... }
+ *
+ * When result is an array of blocks, tool_use blocks are extracted as ToolUseEntry[].
  */
-export function parseClaudeJson(raw: string): { text: string; sessionId?: string } {
+export function parseClaudeJson(raw: string): ParsedClaudeResult {
   try {
     const parsed = JSON.parse(raw);
 
+    const sessionId = parsed.session_id ?? parsed.sessionId;
+    const numTurns = typeof parsed.num_turns === "number" ? parsed.num_turns : undefined;
+    const costUsd = typeof parsed.total_cost_usd === "number" ? parsed.total_cost_usd : undefined;
+
     // Handle top-level result string
     if (typeof parsed.result === "string") {
-      return {
-        text: parsed.result,
-        sessionId: parsed.session_id ?? parsed.sessionId,
-      };
+      return { text: parsed.result, sessionId, numTurns, costUsd };
     }
 
     // Handle array-of-blocks format (newer Claude Code versions)
     if (Array.isArray(parsed.result)) {
       const textParts: string[] = [];
+      const toolUses: ToolUseEntry[] = [];
+
       for (const block of parsed.result) {
         if (block.type === "text" && typeof block.text === "string") {
           textParts.push(block.text);
         }
+        if (block.type === "tool_use" && typeof block.name === "string") {
+          toolUses.push({ name: block.name, input: block.input });
+        }
       }
+
       if (textParts.length > 0) {
         return {
           text: textParts.join("\n"),
-          sessionId: parsed.session_id ?? parsed.sessionId,
+          sessionId,
+          numTurns,
+          costUsd,
+          toolUses: toolUses.length > 0 ? toolUses : undefined,
         };
       }
     }
@@ -199,6 +222,9 @@ export class ClaudeCodeBackend implements Backend {
       sessionId: parsed.sessionId,
       durationMs,
       exitCode: result.code,
+      numTurns: parsed.numTurns,
+      costUsd: parsed.costUsd,
+      toolUses: parsed.toolUses,
     };
   }
 

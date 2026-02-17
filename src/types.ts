@@ -41,6 +41,14 @@ export interface RunOptions {
   maxBudgetUsd?: number;
 }
 
+/** A record of a single tool invocation during the run. */
+export interface ToolUseEntry {
+  /** Tool name (e.g. "Bash", "Edit", "Read"). */
+  name: string;
+  /** Tool input/arguments (parsed from JSON). */
+  input?: unknown;
+}
+
 /** Result from an agent run. */
 export interface RunResult {
   /** The agent's text response. */
@@ -51,6 +59,12 @@ export interface RunResult {
   durationMs: number;
   /** Process exit code (0 = success). */
   exitCode: number | null;
+  /** Number of conversation turns (1 = no tool use, 2+ = tool calls occurred). */
+  numTurns?: number;
+  /** Total API cost in USD (Claude Code only). */
+  costUsd?: number;
+  /** Tools the agent invoked during the run (Claude Code with --verbose only). */
+  toolUses?: ToolUseEntry[];
 }
 
 /** Event emitted during streaming. */
