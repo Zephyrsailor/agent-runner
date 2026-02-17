@@ -6,6 +6,7 @@ export type { AgentRunnerConfig, BackendId } from "./runner.js";
 export type { Backend, RunOptions, RunResult } from "./types.js";
 
 // Backends (for direct use or extending)
+export { AutoBackend } from "./backends/auto.js";
 export { ClaudeCodeBackend } from "./backends/claude-code.js";
 export { CodexBackend } from "./backends/codex.js";
 

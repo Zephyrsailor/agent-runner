@@ -33,6 +33,11 @@ describe("AgentRunner", () => {
     expect(runner.backendName).toBe("codex");
   });
 
+  it("creates auto backend by ID", () => {
+    const runner = new AgentRunner({ backend: "auto" });
+    expect(runner.backendName).toBe("auto");
+  });
+
   it("throws on unknown backend", () => {
     expect(() => new AgentRunner({ backend: "nope" as "claude-code" })).toThrow(
       "Unknown backend",

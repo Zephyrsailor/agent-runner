@@ -24,6 +24,8 @@ export interface RunOptions {
   sandbox?: "none" | "read-only" | "locked";
   /** Additional CLI flags to pass to the backend command. */
   extraArgs?: string[];
+  /** Environment variables to pass to the child process. Merged with process.env. */
+  env?: Record<string, string>;
 }
 
 /** Result from an agent run. */

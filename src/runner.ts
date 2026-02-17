@@ -1,8 +1,9 @@
 import type { Backend, RunOptions, RunResult } from "./types.js";
+import { AutoBackend } from "./backends/auto.js";
 import { ClaudeCodeBackend } from "./backends/claude-code.js";
 import { CodexBackend } from "./backends/codex.js";
 
-export type BackendId = "claude-code" | "codex";
+export type BackendId = "claude-code" | "codex" | "auto";
 
 export interface AgentRunnerConfig {
   /** Built-in backend name or a custom Backend implementation. */
@@ -21,6 +22,8 @@ function resolveBackend(config: AgentRunnerConfig): Backend {
       return new ClaudeCodeBackend({ command: config.command });
     case "codex":
       return new CodexBackend({ command: config.command });
+    case "auto":
+      return new AutoBackend();
     default:
       throw new Error(`Unknown backend: ${config.backend as string}`);
   }

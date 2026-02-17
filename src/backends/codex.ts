@@ -94,9 +94,14 @@ export class CodexBackend implements Backend {
     // Prompt goes as the last positional arg
     args.push(options.prompt);
 
+    const env = options.env
+      ? { ...process.env, ...options.env }
+      : undefined;
+
     const result = await spawnCommand(this.command, {
       args,
       cwd: options.cwd,
+      env,
       timeoutMs,
       signal: options.signal,
     });
