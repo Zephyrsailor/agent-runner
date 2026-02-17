@@ -2,7 +2,7 @@
 
 Unified TypeScript API to run Claude Code and Codex CLI agents programmatically.
 
-Spawn `claude` or `codex` as child processes with structured output parsing, session management, sandbox control, streaming, timeout handling, and abort support.
+Spawn `claude` or `codex` as child processes with full tool access (file editing, bash execution), structured output parsing, streaming, session management, and abort support.
 
 ## Install
 
@@ -14,32 +14,73 @@ npm install agent-runner
 - Claude Code: `npm i -g @anthropic-ai/claude-code`
 - Codex: `npm i -g @openai/codex`
 
-## Usage
+## Quick Start
+
+```typescript
+import { runWithClaude } from "agent-runner";
+
+// One-liner: run a prompt and get the text back
+const answer = await runWithClaude("Fix the bug in src/app.ts", {
+  cwd: "/path/to/project",
+});
+```
+
+## Execution Modes
+
+The key differentiator: agent-runner gives you access to the **full capabilities** of Claude Code and Codex, not just text completion.
 
 ```typescript
 import { AgentRunner } from "agent-runner";
 
 const agent = new AgentRunner({ backend: "claude-code" });
 
-const result = await agent.run({
-  prompt: "Explain this codebase",
+// full-access (default): agent can edit files, run bash, use all tools
+await agent.run({
+  prompt: "Refactor the auth module to use JWT",
   cwd: "/path/to/project",
-  timeoutMs: 120_000,
+  mode: "full-access",
 });
 
-console.log(result.text);
-console.log(`Took ${result.durationMs}ms`);
+// workspace-write: agent can write within workspace, with approval prompts
+await agent.run({
+  prompt: "Add unit tests for the User model",
+  mode: "workspace-write",
+});
+
+// print: text-only response, no tool use (safe for untrusted prompts)
+await agent.run({
+  prompt: "Explain what this codebase does",
+  mode: "print",
+});
 ```
 
-### Auto backend (use whichever CLI is available)
+### Mode mapping
+
+| Mode | Claude Code | Codex |
+|------|------------|-------|
+| `full-access` (default) | `--dangerously-skip-permissions` | `--dangerously-bypass-approvals-and-sandbox` |
+| `workspace-write` | `--permission-mode acceptEdits` | `--sandbox workspace-write --full-auto` |
+| `print` | `--tools ""` | `--sandbox read-only` |
+
+## Streaming
+
+Stream events in real-time, including tool use and results:
 
 ```typescript
-const agent = new AgentRunner({ backend: "auto" });
-// Tries Claude Code first, then Codex
-const result = await agent.run({ prompt: "What does this code do?" });
+for await (const event of agent.stream({
+  prompt: "Read package.json and summarize it",
+  mode: "full-access",
+})) {
+  switch (event.type) {
+    case "text":       process.stdout.write(event.data); break;
+    case "tool_use":   console.log("[tool]", event.data); break;
+    case "tool_result": console.log("[result]", event.data); break;
+    case "done":       console.log("\nExit:", event.data); break;
+  }
+}
 ```
 
-### Multi-turn conversations
+## Multi-turn Conversations
 
 ```typescript
 const first = await agent.run({ prompt: "What files are in src/?" });
@@ -50,41 +91,43 @@ const second = await agent.run({
 });
 ```
 
-### Using Codex
+## Auto Backend
+
+Automatically use whichever CLI is available (tries Claude Code first):
 
 ```typescript
-const codex = new AgentRunner({ backend: "codex" });
-const result = await codex.run({ prompt: "Fix the type errors" });
+import { runWithAuto } from "agent-runner";
+
+const text = await runWithAuto("Explain this code");
 ```
 
-### Sandbox modes
+## Convenience Functions
 
 ```typescript
-// Full access (default for Claude Code) - can edit files and run commands
-await agent.run({ prompt: "Fix the bug in src/app.ts", sandbox: "none" });
+import { runWithClaude, runWithCodex, runWithAuto } from "agent-runner";
 
-// Read-only (default for Codex) - can read but not modify
-await agent.run({ prompt: "Analyze this codebase", sandbox: "read-only" });
+const a = await runWithClaude("Fix the bug", { mode: "full-access" });
+const b = await runWithCodex("Add tests", { mode: "workspace-write" });
+const c = await runWithAuto("Explain this", { mode: "print" });
 ```
 
-### Streaming
+## Advanced Options
 
 ```typescript
-import { streamCommand } from "agent-runner";
-
-const stream = streamCommand({
-  command: "claude",
-  args: ["-p", "--output-format", "stream-json", "Write a haiku"],
-  timeoutMs: 60_000,
+await agent.run({
+  prompt: "Complex task",
+  cwd: "/workspace",
+  model: "opus",
+  systemPrompt: "You are a senior engineer",
+  timeoutMs: 300_000,
+  env: { MY_API_KEY: "sk-..." },
+  allowedTools: ["Bash", "Read", "Edit"],  // Claude Code only
+  maxBudgetUsd: 5.0,                        // Claude Code only
+  extraArgs: ["--verbose"],
 });
-
-for await (const event of stream) {
-  if (event.type === "text") process.stdout.write(event.data + "\n");
-  if (event.type === "done") console.log("Exit:", event.data);
-}
 ```
 
-### Custom backend
+## Custom Backend
 
 ```typescript
 import type { Backend } from "agent-runner";
@@ -100,50 +143,33 @@ const myBackend: Backend = {
 const agent = new AgentRunner({ backend: myBackend });
 ```
 
-### AbortSignal support
-
-```typescript
-const controller = new AbortController();
-setTimeout(() => controller.abort(), 30_000);
-
-const result = await agent.run({
-  prompt: "Long running task",
-  signal: controller.signal,
-});
-```
-
-### Environment variables
-
-```typescript
-const result = await agent.run({
-  prompt: "Use this API key",
-  env: { MY_API_KEY: "sk-..." },
-});
-```
-
-## API
+## API Reference
 
 ### `AgentRunner`
 
 - `constructor(config: { backend: "claude-code" | "codex" | "auto" | Backend, command?: string })`
-- `available(): Promise<boolean>` - Check if the CLI tool is installed
 - `run(options: RunOptions): Promise<RunResult>` - Execute a prompt
+- `stream(options: RunOptions): AsyncIterable<StreamEvent>` - Stream events
+- `available(): Promise<boolean>` - Check if CLI is installed
+- `version(): Promise<string | null>` - Get CLI version
 - `backendName: string` - Name of the active backend
 
 ### `RunOptions`
 
-| Field | Type | Description |
-|-------|------|-------------|
-| `prompt` | `string` | The prompt to send (required) |
-| `cwd` | `string` | Working directory |
-| `sessionId` | `string` | Session ID for multi-turn |
-| `model` | `string` | Model override |
-| `systemPrompt` | `string` | System prompt to append |
-| `signal` | `AbortSignal` | Cancellation signal |
-| `timeoutMs` | `number` | Timeout (default: 300000) |
-| `sandbox` | `"none" \| "read-only" \| "locked"` | Sandbox mode |
-| `extraArgs` | `string[]` | Additional CLI flags |
-| `env` | `Record<string, string>` | Environment variables |
+| Field | Type | Default | Description |
+|-------|------|---------|-------------|
+| `prompt` | `string` | (required) | The prompt to send |
+| `mode` | `"full-access" \| "workspace-write" \| "print"` | `"full-access"` | Execution mode |
+| `cwd` | `string` | `process.cwd()` | Working directory |
+| `sessionId` | `string` | | Session ID for multi-turn |
+| `model` | `string` | | Model override |
+| `systemPrompt` | `string` | | System prompt to append |
+| `signal` | `AbortSignal` | | Cancellation signal |
+| `timeoutMs` | `number` | `300000` | Timeout in ms |
+| `env` | `Record<string, string>` | | Extra env vars |
+| `extraArgs` | `string[]` | | Additional CLI flags |
+| `allowedTools` | `string[]` | | Tool allowlist (Claude only) |
+| `maxBudgetUsd` | `number` | | Budget cap (Claude only) |
 
 ### `RunResult`
 
@@ -154,11 +180,19 @@ const result = await agent.run({
 | `durationMs` | `number` | Wall-clock duration |
 | `exitCode` | `number?` | Process exit code |
 
-### Backends
+### `StreamEvent`
 
-- `ClaudeCodeBackend` - Direct Claude Code CLI backend
-- `CodexBackend` - Direct Codex CLI backend
-- `AutoBackend` - Auto-detect available backend
+| Field | Type | Description |
+|-------|------|-------------|
+| `type` | `"text" \| "tool_use" \| "tool_result" \| "error" \| "done"` | Event type |
+| `data` | `string` | Event payload |
+
+## Testing
+
+```bash
+npm test                              # Unit tests (34 tests)
+AGENT_RUNNER_LIVE_TEST=1 npm test     # + integration tests (requires CLI tools)
+```
 
 ## License
 
